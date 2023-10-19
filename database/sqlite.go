@@ -17,7 +17,7 @@ func InitDb() {
 		panic("Failed to connect database, no sqlite database file.")
 	}
 
-	fmt.Println("数据库初始化成功")
+	fmt.Println("SQLite initialize success")
 
 	//	2. 迁移数据库
 	err = Db.AutoMigrate(&models.Plugin{})
