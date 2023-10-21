@@ -3,8 +3,10 @@ package service
 import (
 	"Forensics_Equipment_Plugin_Manager/database"
 	"Forensics_Equipment_Plugin_Manager/models"
+	"Forensics_Equipment_Plugin_Manager/util"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"time"
 )
 
 func FetchPluginInfo() (result []*models.Plugin, err error) {
@@ -19,7 +21,23 @@ func FetchPluginInfo() (result []*models.Plugin, err error) {
 	return result, nil
 }
 
-func PluginInstall() {}
+func PluginInstall() error {
+	return nil
+}
+
+// zip file path; des path;
+func PluginUpdate(zipPath, pluginPath string) error {
+	var err error
+	if !util.IsZipFileValid(zipPath) {
+		return fmt.Errorf("wrong zip file")
+	}
+	util.MkdirAll(pluginPath)
+	err = util.UnzipWithTimeout(zipPath, pluginPath, 10*time.Second, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func CreateTestData() {
 	plugins := []*models.Plugin{
@@ -33,18 +51,26 @@ func CreateTestData() {
 // IsValidPluginInfo determines whether the info is valid.
 func IsValidPluginInfo(plugin *models.Plugin) bool {
 	// 验证每个字段
+	pluginPath := plugin.Path
+	if !util.IsValidFileName(pluginPath) {
+		return false
+	}
 	return true
 }
 
-func GenPluginInfo(c *gin.Context) (*models.Plugin, error) {
+func GenValidPluginInfo(c *gin.Context) (*models.Plugin, error) {
+	// json unmarshal
 	var plugin models.Plugin
 	var err error
 	err = c.BindJSON(&plugin)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("解析JSON失败")
 	}
-	if !IsValidPluginInfo(&plugin) {
-		return nil, fmt.Errorf("invalid plugin info")
+
+	// check valid info
+	pluginPath := plugin.Path
+	if !util.IsValidFileName(pluginPath) {
+		return nil, fmt.Errorf("请确保插件路径中不要包含空格、中文或者其他特殊字符。")
 	}
 	return &plugin, nil
 }

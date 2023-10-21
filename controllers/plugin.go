@@ -2,15 +2,18 @@ package controllers
 
 import (
 	"Forensics_Equipment_Plugin_Manager/database"
+	"Forensics_Equipment_Plugin_Manager/logger"
 	"Forensics_Equipment_Plugin_Manager/models"
 	"Forensics_Equipment_Plugin_Manager/models/common"
 	"Forensics_Equipment_Plugin_Manager/service"
 	"Forensics_Equipment_Plugin_Manager/util"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 )
 
-var PluginsRootPath = "./aaa/plugins"
+var PluginsRootPath = "./plugins"
+var ZipFilePath = "./receive/archive.zip"
 
 // PluginsInfo returns all plugins info to frontend.
 func PluginsInfo() gin.HandlerFunc {
@@ -18,7 +21,6 @@ func PluginsInfo() gin.HandlerFunc {
 	var err error
 
 	return func(c *gin.Context) {
-		data = gin.H{"code": 333}
 		data, err = service.FetchPluginInfo()
 		if err != nil {
 			common.Failed(c)
@@ -32,59 +34,63 @@ func PluginsInfo() gin.HandlerFunc {
 func PluginInstall() gin.HandlerFunc {
 	var pluginInfo *models.Plugin
 	var err error
-	// 验证参数
-
-	// 执行安装
-
-	// 行数据创建
 	return func(c *gin.Context) {
-		pluginInfo, err = service.GenPluginInfo(c)
+		// 验证参数 ✔
+		pluginInfo, err = service.GenValidPluginInfo(c)
 		if err != nil {
-			common.FailedWithWrongReq(c)
+			common.FailedWithDetail(err.Error(), nil, c)
 			return
 		}
-		fmt.Println("Print plugin info: ")
-		fmt.Println(pluginInfo.FormatString())
-
-		// Overwrite Update
-
+		logger.Log.Debugf("Print plugin info: \n%v", pluginInfo.FormatString())
+		// 执行安装
+		// Overwrite Update， 这里应该封装到 service中去
 		pluginPath := pluginInfo.Path
-		if !util.IsValidFileName(pluginPath) {
-			common.FailedWithDetail("请确保插件路径中不要包含空格、中文或者其他特殊字符。", nil, c)
-			return
-		}
 		absolutePath := fmt.Sprintf("%v/%v", PluginsRootPath, pluginPath)
 		_, err = util.GetFileInfo(absolutePath)
 		if err == nil {
-			common.OKWithDetail("该路径已经安装其他插件，请更换路径。", nil, c)
+			common.FailedWithDetail("该路径已经安装其他插件，请更换路径。", nil, c)
 			return
 		}
-
-		util.MkdirAll(absolutePath)
-		// util.UnzipWithTimeout()
-		//
-		//database.Db.Save(&pluginInfo)
-		common.OKWithDetail("是一个有效的插件路径", nil, c)
+		err = service.PluginUpdate(ZipFilePath, absolutePath)
+		if err != nil {
+			common.FailedWithDetail(err.Error(), nil, c)
+			return
+		}
+		// 写入到数据库
+		database.Db.Save(&pluginInfo)
+		common.OKWithDetail("安装成功", pluginInfo, c)
 	}
 }
 
 // PluginUpdate is similar to PluginInstall.
 func PluginUpdate() gin.HandlerFunc {
+	var pluginInfo *models.Plugin
 	var err error
-	// 验证参数，并且要确认表中包含该主键（或者名称）才可更新插件。
-	var pluginInfo models.Plugin
-
-	// 执行更新
-
-	// 行数据创建
 	return func(c *gin.Context) {
-		err = c.BindJSON(&pluginInfo)
+		// 验证参数 ✔
+		pluginInfo, err = service.GenValidPluginInfo(c)
 		if err != nil {
-			common.FailedWithWrongReq(c)
+			common.FailedWithDetail(err.Error(), nil, c)
 			return
 		}
+		logger.Log.Debugf("Print plugin info: \n%v", pluginInfo.FormatString())
+		// 执行安装
+		// Overwrite Update， 这里应该封装到 service中去
+		pluginPath := pluginInfo.Path
+		absolutePath := fmt.Sprintf("%v/%v", PluginsRootPath, pluginPath)
+		_, err = util.GetFileInfo(absolutePath)
+		if err != nil {
+			common.FailedWithDetail("不存在该路径，请检查插件更新路径", nil, c)
+			return
+		}
+		err = service.PluginUpdate(ZipFilePath, absolutePath)
+		if err != nil {
+			common.FailedWithDetail(err.Error(), nil, c)
+			return
+		}
+		// 写入到数据库
 		database.Db.Save(&pluginInfo)
-		common.OK(c)
+		common.OKWithDetail("更新成功", pluginInfo, c)
 	}
 }
 
@@ -97,6 +103,7 @@ func PluginUninstall() gin.HandlerFunc {
 
 	// 行数据创建
 	return func(c *gin.Context) {
+		panic("implement me！")
 		err = c.BindJSON(&pluginInfo)
 		if err != nil {
 			common.FailedWithWrongReq(c)
@@ -109,22 +116,33 @@ func PluginUninstall() gin.HandlerFunc {
 
 func PluginInfoModify() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
+		panic("implement me!")
 	}
 }
 
 func TestFileUpload() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var pluginInfo models.Plugin
+		// test receive file
 		file, err := c.FormFile("file")
 		if err != nil {
+			logger.Log.Error("File Upload, ", err)
 			fmt.Println(err)
 			common.FailedWithDetail("Bad file argument!", nil, c)
 			return
 		}
 		fmt.Println("file name: ", file.Filename)
 
-		dst := "./resources/receive/" + file.Filename
-		c.SaveUploadedFile(file, dst)
+		// test receive json data
+		jsonValue := c.Request.PostFormValue("data")
+		err = json.Unmarshal([]byte(jsonValue), &pluginInfo)
+		if err != nil {
+			logger.Log.Error("JSON Error: , ", err)
+		}
+		fmt.Println("Receive Data: ")
+		fmt.Println(pluginInfo.FormatString())
+		//dst := "./resources/receive/" + file.Filename
+		//c.SaveUploadedFile(file, dst)
 
 		common.OK(c)
 	}

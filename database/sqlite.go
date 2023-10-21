@@ -14,7 +14,7 @@ func InitDb() {
 	var err error
 	Db, err = gorm.Open(sqlite.Open("resources/test.db"), &gorm.Config{})
 	if err != nil {
-		panic("Failed to connect database, no sqlite database file.")
+		panic("Failed to connect database, no sqlite database file in resources dir.")
 	}
 
 	fmt.Println("SQLite initialize success")

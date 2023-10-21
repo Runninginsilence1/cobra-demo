@@ -4,13 +4,14 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-// UnzipWithTimeout unzip a zip file to specific path with a timeout canceled.
-func UnzipWithTimeout(source, target string, timeout time.Duration) error {
+// UnzipWithTimeout unzip a zip file to specific path with a timeout canceled. If success, it will remove source zip file.
+func UnzipWithTimeout(source, target string, timeout time.Duration, remove bool) error {
 	r, err := zip.OpenReader(source)
 	if err != nil {
 		return err
@@ -62,5 +63,21 @@ func UnzipWithTimeout(source, target string, timeout time.Duration) error {
 		}
 	}
 
+	// If "remove" is true, it will try removing source zip file.
+	if remove {
+		os.Remove(source)
+	}
 	return nil
+}
+
+// IsZipFileValid is used to validate the integrity of the ZIP file.
+func IsZipFileValid(path string) bool {
+	// 打开 ZIP 文件
+	zipFile, err := zip.OpenReader(path)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	zipFile.Close()
+	return true
 }
